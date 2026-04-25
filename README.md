@@ -1,29 +1,129 @@
-# Create T3 App
+# BPSR Recruitment Board
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A full-stack recruitment board for **Blue Protocol: Star Resonance** — find and organize dungeon, raid, and party teams.
 
-## What's next? How do I make an app with this?
+Built with the **T3 Stack**: Next.js 15, tRPC 11, Prisma 6, Tailwind CSS 4, NextAuth v5.
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+## Features
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+### For Players
+- **Browse Teams** — filter by content type, difficulty, role needed, schedule
+- **Player Profiles** — create multiple profiles with class, spec, ability score, dream level, and more
+- **Apply to Teams** — submit applications to open role slots with an optional message
+- **Track Applications** — view and withdraw pending applications
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+### For Team Leaders
+- **Create Teams** — set up recruitment posts with role slots, preferred classes, and minimum requirements
+- **Manage Applications** — approve/reject applicants, slots auto-fill on approval
+- **Team Status** — track OPEN → IN_PROGRESS → COMPLETED lifecycle
 
-## Learn More
+### For Admins
+- **Dashboard** — user, team, and application statistics
+- **Dictionary Management** — CRUD for game data (classes, specs, dungeons, raids, difficulties, servers)
+- **User Management** — change roles, ban/unban users
+- **Team Moderation** — search, filter, and delete teams
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## Game Data (BPSR)
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+| Classes | Specs | Content |
+|---------|-------|---------|
+| Heavy Guardian | Fortress Guardian, Titan | 12 Dungeons (S1 + S2) |
+| Shield Knight | Holy Knight, Crusader | 6 Raids |
+| Stormblade | Blade Dancer, Shadow Blade | World Boss, Rush Battle |
+| Wind Knight | Sky Lancer, Gale Striker | Training Ruins, Stimen Vault |
+| Marksman | Sniper, Hawkeye | |
+| Frost Mage | Cryomancer, Elemental Lord | |
+| Verdant Oracle | Life Weaver, Nature Guardian | |
+| Beat Performer | Melody Master, Rhythm Fighter | |
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+**Metrics**: Ability Score, Dream Level (1-90), Illusion Strength, Adventurer Level (cap 60)
 
-## How do I deploy this?
+## Tech Stack
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+- **Framework**: Next.js 15 (App Router)
+- **API**: tRPC 11 with typed routers
+- **Database**: SQLite via Prisma 6
+- **Auth**: NextAuth v5 (Discord OAuth, JWT sessions)
+- **Styling**: Tailwind CSS 4 with custom BPSR theme
+- **Role-based access**: USER, LEADER, ADMIN procedures
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- npm
+
+### Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Discord OAuth credentials:
+# AUTH_DISCORD_ID=your-discord-client-id
+# AUTH_DISCORD_SECRET=your-discord-client-secret
+
+# Set up database and seed game data
+npx prisma db push
+npx prisma db seed
+
+# Start development server
+npm run dev
+```
+
+### Discord OAuth Setup
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a new application
+3. Navigate to OAuth2 → General
+4. Add redirect: `http://localhost:3000/api/auth/callback/discord`
+5. Copy Client ID and Client Secret to `.env`
+
+### First Admin
+
+After signing in for the first time, promote your user to admin:
+
+```bash
+npx prisma db execute --schema prisma/schema.prisma --stdin <<< "UPDATE users SET role = 'ADMIN' WHERE email = 'your-email@example.com';"
+```
+
+Then sign out and sign back in to get the updated JWT.
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── admin/            # Admin dashboard, users, teams, dictionaries
+│   ├── my-applications/  # Track submitted applications
+│   ├── my-teams/         # Teams I lead and joined
+│   ├── players/          # Public player browser and profiles
+│   ├── profile/          # Create/edit player profiles
+│   └── teams/            # Browse, create, and view teams
+├── components/layout/    # Navbar
+├── server/
+│   ├── api/routers/      # tRPC routers (7 total)
+│   └── auth/             # NextAuth config
+└── styles/               # BPSR theme globals
+
+prisma/
+├── schema.prisma         # 15 models
+├── seed.ts               # BPSR game data
+└── migrations/           # Database migrations
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run lint` | Run ESLint |
+| `npx prisma studio` | Open database browser |
+| `npx prisma db seed` | Seed BPSR game data |
+
+## License
+
+MIT
