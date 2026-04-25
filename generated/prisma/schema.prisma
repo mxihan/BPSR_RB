@@ -8,52 +8,52 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-  // Further reading:
-  // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-  // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
   url      = env("DATABASE_URL")
 }
 
-model Post {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ============================================
+// Enums
+// ============================================
 
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-
-  @@index([name])
+enum UserRole {
+  USER
+  LEADER
+  ADMIN
 }
 
-// Necessary for Next auth
-model Account {
-  id                       String  @id @default(cuid())
-  userId                   String
-  type                     String
-  provider                 String
-  providerAccountId        String
-  refresh_token            String? // @db.Text
-  access_token             String? // @db.Text
-  expires_at               Int?
-  token_type               String?
-  scope                    String?
-  id_token                 String? // @db.Text
-  session_state            String?
-  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refresh_token_expires_in Int?
-
-  @@unique([provider, providerAccountId])
+enum ContentType {
+  DUNGEON
+  RAID
+  WORLD_BOSS
+  RUSH_BATTLE
+  TRAINING_RUINS
+  STIMEN_VAULT
+  OTHER
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum TeamStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum GameSeason {
+  SEASON_1
+  SEASON_2
+  ANY
+}
+
+// ============================================
+// Auth (NextAuth v5)
+// ============================================
 
 model User {
   id            String    @id @default(cuid())
@@ -61,9 +61,52 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  role          UserRole  @default(USER)
+  banned        Boolean   @default(false)
+  banReason     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
   accounts      Account[]
   sessions      Session[]
-  posts         Post[]
+  profiles      PlayerProfile[]
+  ledTeams      Team[]          @relation("TeamLeader")
+  notifications Notification[]
+  comments      TeamComment[]
+
+  @@map("users")
+}
+
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String?
+  access_token             String?
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String?
+  session_state            String?
+  refresh_token_expires_in Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model VerificationToken {
@@ -72,4 +115,287 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// Dictionaries (Admin-managed game data)
+// ============================================
+
+model DictClass {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  nameJa      String?
+  role        String
+  mainStat    String
+  iconUrl     String?
+  description String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  specs             DictSpec[]
+  primaryProfiles   PlayerProfile[] @relation("PrimaryClass")
+  secondaryProfiles PlayerProfile[] @relation("SecondaryClass")
+  preferredInSlots  RoleSlot[]      @relation("SlotPreferredClass")
+
+  @@map("dict_classes")
+}
+
+model DictSpec {
+  id          String   @id @default(cuid())
+  classId     String
+  name        String
+  nameJa      String?
+  description String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class             DictClass       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  primaryProfiles   PlayerProfile[] @relation("PrimarySpec")
+  secondaryProfiles PlayerProfile[] @relation("SecondarySpec")
+  preferredInSlots  RoleSlot[]      @relation("SlotPreferredSpec")
+
+  @@unique([classId, name])
+  @@map("dict_specs")
+}
+
+model DictContent {
+  id                   String      @id @default(cuid())
+  contentType          ContentType
+  name                 String      @unique
+  nameJa               String?
+  season               GameSeason  @default(ANY)
+  partySize            Int         @default(4)
+  description          String?
+  dreamStrengthNormal  Int?
+  dreamStrengthHard    Int?
+  dreamStrengthMaster1 Int?
+  dreamStrengthMaster6 Int?
+  iconUrl              String?
+  sortOrder            Int         @default(0)
+  active               Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  teams Team[]
+
+  @@map("dict_contents")
+}
+
+model DictDifficulty {
+  id          String      @id @default(cuid())
+  contentType ContentType
+  name        String
+  nameJa      String?
+  levelBased  Boolean     @default(false)
+  minLevel    Int?
+  maxLevel    Int?
+  description String?
+  sortOrder   Int         @default(0)
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  teams Team[]
+
+  @@map("dict_difficulties")
+}
+
+model DictServer {
+  id        String   @id @default(cuid())
+  name      String
+  nameJa    String?
+  region    String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profiles PlayerProfile[]
+
+  @@map("dict_servers")
+}
+
+// ============================================
+// Player Profiles
+// ============================================
+
+model PlayerProfile {
+  id                 String   @id @default(cuid())
+  userId             String
+  displayName        String
+  serverId           String?
+  adventurerLevel    Int?
+  primaryClassId     String?
+  primarySpecId      String?
+  secondaryClassId   String?
+  secondarySpecId    String?
+  abilityScore       Int?
+  dreamLevel         Int?
+  illusionStrength   Int?
+  adventurerRank     Int?
+  about              String?
+  timezone           String?
+  preferredPlayTimes String?
+  isVisible          Boolean  @default(true)
+  isMain             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server         DictServer? @relation(fields: [serverId], references: [id])
+  primaryClass   DictClass?  @relation("PrimaryClass", fields: [primaryClassId], references: [id])
+  primarySpec    DictSpec?   @relation("PrimarySpec", fields: [primarySpecId], references: [id])
+  secondaryClass DictClass?  @relation("SecondaryClass", fields: [secondaryClassId], references: [id])
+  secondarySpec  DictSpec?   @relation("SecondarySpec", fields: [secondarySpecId], references: [id])
+
+  applications Application[]
+  teamSlots    TeamMember[]
+  filledSlots  RoleSlot[]    @relation("SlotFilledBy")
+
+  @@map("player_profiles")
+}
+
+// ============================================
+// Team Recruitment Posts
+// ============================================
+
+model Team {
+  id           String      @id @default(cuid())
+  leaderId     String
+  title        String
+  contentType  ContentType
+  contentId    String?
+  season       GameSeason  @default(ANY)
+  difficultyId String?
+  masterLevel  Int?
+  description  String?
+  scheduledAt  DateTime?
+  autoCloseAt  DateTime?
+  maxPartySize Int         @default(4)
+  status       TeamStatus  @default(OPEN)
+  tags         String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  leader     User            @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  content    DictContent?    @relation(fields: [contentId], references: [id])
+  difficulty DictDifficulty? @relation(fields: [difficultyId], references: [id])
+
+  slots        RoleSlot[]
+  applications Application[]
+  comments     TeamComment[]
+  members      TeamMember[]
+
+  @@map("teams")
+}
+
+model RoleSlot {
+  id                  String   @id @default(cuid())
+  teamId              String
+  role                String
+  preferredClassId    String?
+  preferredSpecId     String?
+  minAbilityScore     Int?
+  minDreamLevel       Int?
+  minIllusionStrength Int?
+  isFilled            Boolean  @default(false)
+  filledById          String?
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  team           Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  preferredClass DictClass?     @relation("SlotPreferredClass", fields: [preferredClassId], references: [id])
+  preferredSpec  DictSpec?      @relation("SlotPreferredSpec", fields: [preferredSpecId], references: [id])
+  filledBy       PlayerProfile? @relation("SlotFilledBy", fields: [filledById], references: [id])
+
+  applications Application[]
+  member       TeamMember[]
+
+  @@map("role_slots")
+}
+
+// ============================================
+// Applications
+// ============================================
+
+model Application {
+  id         String            @id @default(cuid())
+  teamId     String
+  slotId     String
+  profileId  String
+  message    String?
+  status     ApplicationStatus @default(PENDING)
+  reviewNote String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  slot    RoleSlot      @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, slotId, profileId])
+  @@map("applications")
+}
+
+// ============================================
+// Team Members (confirmed)
+// ============================================
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  profileId String
+  slotId    String?
+  role      String   @default("Member")
+  joinedAt  DateTime @default(now())
+
+  team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  slot    RoleSlot?     @relation(fields: [slotId], references: [id])
+
+  @@unique([teamId, profileId])
+  @@map("team_members")
+}
+
+// ============================================
+// Comments
+// ============================================
+
+model TeamComment {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("team_comments")
+}
+
+// ============================================
+// Notifications
+// ============================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
